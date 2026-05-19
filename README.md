@@ -15,6 +15,10 @@
 
 </div>
 
+<p align="center">
+  <img src="screenshots/01-hero.png" alt="Free QR Generator — giao diện chính" width="900">
+</p>
+
 ---
 
 ## Giới thiệu
@@ -34,6 +38,27 @@ Bản demo chính thức đang chạy tại [qr.vansao.com](https://qr.vansao.co
 - **Lịch sử** lưu cục bộ trong trình duyệt (`localStorage`)
 - **Xuất PNG / SVG** chất lượng cao
 - **Dark mode** và giao diện responsive
+
+## Giao diện
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="screenshots/02-templates.png" alt="12 template thẩm mỹ"><br>
+      <sub><b>12 template</b> — chọn 1 click, đổi luôn màu, dot, góc</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="screenshots/04-frame.png" alt="Khung viền & nhãn chữ"><br>
+      <sub><b>Khung viền & logo</b> — gắn logo, thêm nhãn "QUÉT MÃ"</sub>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">
+      <img src="screenshots/03-mockup.png" alt="Mockup scene — Card visit" width="700"><br>
+      <sub><b>6 mockup scene</b> — Poster · Khung tranh · Kệ để bàn · Card visit · Menu · Điện thoại</sub>
+    </td>
+  </tr>
+</table>
 
 ## Triết lý
 
@@ -70,10 +95,11 @@ index.html · icon.png · robots.txt · sitemap.xml
 
 ```
 free-qr-generator/
-├── index.html      # Toàn bộ ứng dụng (HTML + CSS + JS)
-├── icon.png        # Favicon & Open Graph image
+├── index.html       # Toàn bộ ứng dụng (HTML + CSS + JS)
+├── icon.png         # Favicon & Open Graph image
 ├── robots.txt
-└── sitemap.xml
+├── sitemap.xml
+└── screenshots/     # Ảnh minh họa cho README
 ```
 
 ## Đóng góp
