@@ -736,6 +736,17 @@ box-shadow:var(--shadow-lg)}
   </div>
   <div id="frameOptions" style="display:none">
     <div class="mb-3">
+      <label class="form-label">Kiểu khung</label>
+      <select class="form-select" id="frameStyle">
+        <option value="classic">Cổ điển — dải đặc + viền vuông</option>
+        <option value="rounded">Bo tròn — viền & nhãn bo góc</option>
+        <option value="ribbon">Băng ribbon — nhãn dạng dải băng</option>
+        <option value="brackets">Góc L — 4 dấu góc kiểu ngắm</option>
+        <option value="tag">Tag dán — nhãn có 2 lỗ tròn</option>
+        <option value="arrow">Mũi tên — nhãn dạng mũi tên chỉ vào QR</option>
+      </select>
+    </div>
+    <div class="mb-3">
       <label class="form-label">Nội dung nhãn</label>
       <input type="text" class="form-control" id="frameText" placeholder="QUÉT MÃ" value="QUÉT MÃ" maxlength="40">
     </div>
@@ -1087,22 +1098,62 @@ $('generateBtn').addEventListener('click', async () => {
 });
 
 // ─── Compose QR with frame & caption ───
+function roundedRectPath(ctx, x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, Math.min(w, h) / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+function fitFont(ctx, text, maxWidth, baseSize, family) {
+  let s = baseSize;
+  ctx.font = '700 ' + s + 'px ' + family;
+  while (ctx.measureText(text).width > maxWidth && s > 10) {
+    s -= 1;
+    ctx.font = '700 ' + s + 'px ' + family;
+  }
+  return s;
+}
+
 async function composeFrame(qr, size) {
   const blob = await qr.getRawData('png');
   const img = new Image();
   img.src = URL.createObjectURL(blob);
-  await new Promise(r => { img.onload = r; });
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; }).catch(()=>{});
   URL.revokeObjectURL(img.src);
 
-  const text = ($('frameText').value || 'QUÉT MÃ').toUpperCase();
-  const pos = $('framePos').value;
-  const frameColor = $('frameColor').value;
-  const bgColor = $('bgColor').value;
+  const opts = {
+    img, size,
+    text: ($('frameText').value || 'QUÉT MÃ').toUpperCase(),
+    pos: $('framePos').value,
+    frameColor: $('frameColor').value,
+    bgColor: $('bgColor').value,
+    textColor: $('frameTextColor').value,
+  };
+  const renderers = {
+    classic: drawClassicFrame,
+    rounded: drawRoundedFrame,
+    ribbon: drawRibbonFrame,
+    brackets: drawBracketsFrame,
+    tag: drawTagFrame,
+    arrow: drawArrowFrame,
+  };
+  const style = ($('frameStyle') && $('frameStyle').value) || 'classic';
+  return (renderers[style] || drawClassicFrame)(opts);
+}
+
+function drawClassicFrame({ img, size, text, pos, frameColor, bgColor, textColor }) {
   const pad = Math.round(size * 0.08);
   const captionH = Math.round(size * 0.16);
   const fontSize = Math.round(size * 0.07);
   const borderW = Math.max(4, Math.round(size * 0.018));
-
   const w = size + pad * 2;
   const h = size + pad * 2 + captionH;
   const canvas = document.createElement('canvas');
@@ -1115,13 +1166,13 @@ async function composeFrame(qr, size) {
   const qrY = pos === 'top' ? pad + captionH : pad;
   const capY = pos === 'top' ? 0 : pad * 2 + size;
 
-  const textColor = $('frameTextColor').value;
   ctx.fillStyle = frameColor;
   ctx.fillRect(0, capY, w, captionH);
+
   ctx.fillStyle = textColor;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = '700 ' + fontSize + 'px "DM Sans", sans-serif';
+  fitFont(ctx, text, w - pad * 2, fontSize, '"DM Sans", sans-serif');
   ctx.fillText(text, w / 2, capY + captionH / 2);
 
   ctx.drawImage(img, pad, qrY, size, size);
@@ -1129,7 +1180,262 @@ async function composeFrame(qr, size) {
   ctx.strokeStyle = frameColor;
   ctx.lineWidth = borderW;
   ctx.strokeRect(borderW / 2, borderW / 2, w - borderW, h - borderW);
+  return canvas;
+}
 
+function drawRoundedFrame({ img, size, text, pos, frameColor, bgColor, textColor }) {
+  const pad = Math.round(size * 0.08);
+  const captionH = Math.round(size * 0.16);
+  const fontSize = Math.round(size * 0.07);
+  const borderW = Math.max(4, Math.round(size * 0.018));
+  const radius = Math.round(size * 0.07);
+  const w = size + pad * 2;
+  const h = size + pad * 2 + captionH;
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+
+  roundedRectPath(ctx, 0, 0, w, h, radius);
+  ctx.fillStyle = bgColor;
+  ctx.fill();
+
+  const capY = pos === 'top' ? 0 : pad * 2 + size;
+  ctx.save();
+  roundedRectPath(ctx, 0, 0, w, h, radius);
+  ctx.clip();
+  ctx.fillStyle = frameColor;
+  ctx.fillRect(0, capY, w, captionH);
+  ctx.restore();
+
+  ctx.fillStyle = textColor;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  fitFont(ctx, text, w - pad * 2, fontSize, '"DM Sans", sans-serif');
+  ctx.fillText(text, w / 2, capY + captionH / 2);
+
+  const qrY = pos === 'top' ? pad + captionH : pad;
+  ctx.drawImage(img, pad, qrY, size, size);
+
+  roundedRectPath(ctx, borderW / 2, borderW / 2, w - borderW, h - borderW, Math.max(0, radius - borderW / 2));
+  ctx.strokeStyle = frameColor;
+  ctx.lineWidth = borderW;
+  ctx.stroke();
+  return canvas;
+}
+
+function shadeHex(hex, amount) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const clamp = v => Math.max(0, Math.min(255, v));
+  const r = clamp(((n >> 16) & 0xff) + amount);
+  const g = clamp(((n >> 8) & 0xff) + amount);
+  const b = clamp((n & 0xff) + amount);
+  return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+}
+
+function drawRibbonFrame({ img, size, text, pos, frameColor, bgColor, textColor }) {
+  const pad = Math.round(size * 0.08);
+  const captionH = Math.round(size * 0.16);
+  const fontSize = Math.round(size * 0.07);
+  const overhang = Math.round(size * 0.08);
+  const tail = Math.round(size * 0.04);
+  const innerBorderW = Math.max(3, Math.round(size * 0.012));
+  const w = size + pad * 2 + overhang * 2;
+  const h = size + pad * 2 + captionH + tail;
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, w, h);
+
+  const qrX = (w - size) / 2;
+  const qrY = pos === 'top' ? pad + captionH + tail : pad;
+  ctx.drawImage(img, qrX, qrY, size, size);
+  ctx.strokeStyle = frameColor;
+  ctx.lineWidth = innerBorderW;
+  ctx.strokeRect(qrX - pad / 2, qrY - pad / 2, size + pad, size + pad);
+
+  const capY = pos === 'top' ? tail : pad * 2 + size + tail;
+  const innerL = overhang, innerR = w - overhang;
+
+  ctx.fillStyle = shadeHex(frameColor, -40);
+  ctx.beginPath();
+  ctx.moveTo(innerL, capY);
+  ctx.lineTo(innerL, capY + captionH);
+  ctx.lineTo(innerL - overhang * 0.4, capY + captionH + tail);
+  ctx.lineTo(innerL - overhang * 0.4, capY - tail * 0.2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(innerR, capY);
+  ctx.lineTo(innerR, capY + captionH);
+  ctx.lineTo(innerR + overhang * 0.4, capY + captionH + tail);
+  ctx.lineTo(innerR + overhang * 0.4, capY - tail * 0.2);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = frameColor;
+  ctx.beginPath();
+  ctx.moveTo(0, capY - tail * 0.2);
+  ctx.lineTo(w, capY - tail * 0.2);
+  ctx.lineTo(w - overhang * 0.55, capY + captionH / 2);
+  ctx.lineTo(w, capY + captionH + tail * 0.2);
+  ctx.lineTo(0, capY + captionH + tail * 0.2);
+  ctx.lineTo(overhang * 0.55, capY + captionH / 2);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = textColor;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  fitFont(ctx, text, (innerR - innerL) - pad, fontSize, '"DM Sans", sans-serif');
+  ctx.fillText(text, w / 2, capY + captionH / 2);
+  return canvas;
+}
+
+function drawBracketsFrame({ img, size, text, pos, frameColor, bgColor, textColor }) {
+  const pad = Math.round(size * 0.08);
+  const captionH = Math.round(size * 0.18);
+  const fontSize = Math.round(size * 0.075);
+  const brW = Math.max(4, Math.round(size * 0.02));
+  const brLen = Math.round(size * 0.12);
+  const w = size + pad * 2;
+  const h = size + pad * 2 + captionH;
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, w, h);
+
+  const qrY = pos === 'top' ? pad + captionH : pad;
+  const capY = pos === 'top' ? 0 : pad * 2 + size;
+  ctx.drawImage(img, pad, qrY, size, size);
+
+  ctx.fillStyle = frameColor;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  fitFont(ctx, text, w - pad * 2, fontSize, '"DM Sans", sans-serif');
+  ctx.fillText(text, w / 2, capY + captionH / 2);
+
+  ctx.strokeStyle = frameColor;
+  ctx.lineWidth = brW;
+  ctx.lineCap = 'square';
+  const m = brW / 2;
+  const x0 = m, y0 = m, x1 = w - m, y1 = h - m;
+  ctx.beginPath(); ctx.moveTo(x0, y0 + brLen); ctx.lineTo(x0, y0); ctx.lineTo(x0 + brLen, y0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x1 - brLen, y0); ctx.lineTo(x1, y0); ctx.lineTo(x1, y0 + brLen); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x1, y1 - brLen); ctx.lineTo(x1, y1); ctx.lineTo(x1 - brLen, y1); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x0 + brLen, y1); ctx.lineTo(x0, y1); ctx.lineTo(x0, y1 - brLen); ctx.stroke();
+  return canvas;
+}
+
+function drawTagFrame({ img, size, text, pos, frameColor, bgColor, textColor }) {
+  const pad = Math.round(size * 0.08);
+  const captionH = Math.round(size * 0.16);
+  const fontSize = Math.round(size * 0.065);
+  const borderW = Math.max(4, Math.round(size * 0.018));
+  const radius = Math.round(size * 0.05);
+  const holeR = Math.round(captionH * 0.2);
+  const w = size + pad * 2;
+  const h = size + pad * 2 + captionH;
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+
+  roundedRectPath(ctx, 0, 0, w, h, radius);
+  ctx.fillStyle = bgColor;
+  ctx.fill();
+
+  const capY = pos === 'top' ? 0 : pad * 2 + size;
+  ctx.save();
+  roundedRectPath(ctx, 0, 0, w, h, radius);
+  ctx.clip();
+  ctx.fillStyle = frameColor;
+  ctx.fillRect(0, capY, w, captionH);
+  ctx.restore();
+
+  const holeY = capY + captionH / 2;
+  ctx.fillStyle = bgColor;
+  ctx.beginPath(); ctx.arc(pad * 0.75, holeY, holeR, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(w - pad * 0.75, holeY, holeR, 0, Math.PI * 2); ctx.fill();
+
+  ctx.fillStyle = textColor;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  fitFont(ctx, text, w - pad * 3, fontSize, '"DM Sans", sans-serif');
+  ctx.fillText(text, w / 2, capY + captionH / 2);
+
+  const qrY = pos === 'top' ? pad + captionH : pad;
+  ctx.drawImage(img, pad, qrY, size, size);
+
+  roundedRectPath(ctx, borderW / 2, borderW / 2, w - borderW, h - borderW, Math.max(0, radius - borderW / 2));
+  ctx.strokeStyle = frameColor;
+  ctx.lineWidth = borderW;
+  ctx.stroke();
+  return canvas;
+}
+
+function drawArrowFrame({ img, size, text, pos, frameColor, bgColor, textColor }) {
+  const pad = Math.round(size * 0.08);
+  const arrowH = Math.round(size * 0.22);
+  const tipH = Math.round(arrowH * 0.4);
+  const fontSize = Math.round(size * 0.075);
+  const borderW = Math.max(4, Math.round(size * 0.018));
+  const w = size + pad * 2;
+  const h = size + pad * 2 + arrowH;
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, w, h);
+
+  const qrY = pos === 'top' ? pad + arrowH : pad;
+  ctx.drawImage(img, pad, qrY, size, size);
+  ctx.strokeStyle = frameColor;
+  ctx.lineWidth = borderW;
+  ctx.strokeRect(pad - borderW / 2, qrY - borderW / 2, size + borderW, size + borderW);
+
+  const arrowY = pos === 'top' ? 0 : size + pad * 2;
+  const cx = w / 2;
+  const tipW = Math.round(size * 0.42);
+  ctx.fillStyle = frameColor;
+  ctx.beginPath();
+  if (pos === 'top') {
+    const bodyTop = arrowY;
+    const bodyBottom = arrowY + arrowH - tipH;
+    ctx.moveTo(0, bodyTop);
+    ctx.lineTo(w, bodyTop);
+    ctx.lineTo(w, bodyBottom);
+    ctx.lineTo(cx + tipW / 2, bodyBottom);
+    ctx.lineTo(cx, arrowY + arrowH);
+    ctx.lineTo(cx - tipW / 2, bodyBottom);
+    ctx.lineTo(0, bodyBottom);
+  } else {
+    const bodyTop = arrowY + tipH;
+    const bodyBottom = arrowY + arrowH;
+    ctx.moveTo(0, bodyBottom);
+    ctx.lineTo(0, bodyTop);
+    ctx.lineTo(cx - tipW / 2, bodyTop);
+    ctx.lineTo(cx, arrowY);
+    ctx.lineTo(cx + tipW / 2, bodyTop);
+    ctx.lineTo(w, bodyTop);
+    ctx.lineTo(w, bodyBottom);
+  }
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = textColor;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const bodyMidY = pos === 'top'
+    ? arrowY + (arrowH - tipH) / 2
+    : arrowY + tipH + (arrowH - tipH) / 2;
+  fitFont(ctx, text, w - pad * 2, fontSize, '"DM Sans", sans-serif');
+  ctx.fillText(text, cx, bodyMidY);
   return canvas;
 }
 
@@ -1563,7 +1869,7 @@ $('dlMockupCopy').addEventListener('click', () => {
 const formFieldIds = ['inUrl','inSsid','inWifiPass','inWifiEnc','inLastName','inFirstName',
   'inVPhone','inVEmail','inOrg','inAddr','inText','inEmail','inEmailSubject','inEmailBody','inPhone'];
 const styleFieldIds = ['dotColor','bgColor','dotColor2','bgColor2','cornerSquareColor','cornerDotColor',
-  'frameColor','frameTextColor','frameText','framePos','dotType','cornerSquareType','cornerDotType',
+  'frameColor','frameTextColor','frameText','framePos','frameStyle','dotType','cornerSquareType','cornerDotType',
   'dotGradType','bgGradType','ecLevel','logoSize','qrSize'];
 const checkboxIds = ['dotGradCheck','bgGradCheck','frameCheck'];
 
@@ -1657,7 +1963,7 @@ window.addEventListener('DOMContentLoaded', () => setTimeout(() => generateQR(),
 const watchIds = ['inUrl','inSsid','inWifiPass','inWifiEnc','inLastName','inFirstName',
   'inVPhone','inVEmail','inOrg','inAddr','inText','inEmail','inEmailSubject','inEmailBody',
   'inPhone','dotColor','bgColor','dotColor2','bgColor2','cornerSquareColor','cornerDotColor',
-  'frameColor','frameTextColor','frameText','framePos','dotType','cornerSquareType','cornerDotType',
+  'frameColor','frameTextColor','frameText','framePos','frameStyle','dotType','cornerSquareType','cornerDotType',
   'dotGradType','bgGradType','ecLevel','logoSize','qrSize',
   'dotGradCheck','bgGradCheck','frameCheck'];
 let previewTimer, idleSaveTimer;
